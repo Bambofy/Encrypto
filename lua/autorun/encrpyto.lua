@@ -14,41 +14,6 @@ end
 
 if SERVER then
 
-	-- Check that the binary is available.
-	if (CheckGmSvCryptInstalled()) then
-
-		encrypto.available = true
-
-		encrypto.playerKeys = {} -- for securing Net library calls. (CACHE)
-		-- encrypto.playerKeys["steamid"] = { "RSA pubkey". "RSA privkey" }
-		encrypto.serverKeys = {}
-		-- encrypto.serverKeys["outbound"]["public"] = "RSA pub key"
-		-- encrypto.serverKeys["outbound"]["private"] = "RSA priv key"
-		-- encrypto.serverKeys["inbound"]["public"] = "RSA pub key"
-		-- encrypto.serverKeys["inbound"]["private"] = "RSA priv key"
-
-		require("crypt")
-
-		encrypto.Crypter = crypt.RSA() -- this is a class. eg. crypter = new RSA(), crypter->SetPrivateKey(), crypter->Encrypt()
-
-		print("[ENCRYPTO] Loaded serverside .dll", crypt.Version, encrypto.Crypter:AlgorithmName())
-
-
-		local playerTableExists = sql.TableExists("player_keys")
-		local serverTableExists = sql.TableExists("server_keys")
-
-		if (!playerTableExists) then
-			sql.Query("CREATE TABLE player_keys (SteamID TEXT, PrivateKey TEXT, PublicKey TEXT)")
-		end
-
-		if (!serverTableExists) then
-			sql.Query("CREATE TABLE server_keys (ID TEXT, PrivateKey TEXT, PublicKey TEXT)")
-		end
-
-
-		encrypto.loadServerKeys()
-	end
-
 	encrypto.loadServerKeys = function()
 
 		print("[ENCRYPTO] Loading outbound server keys..")
@@ -67,17 +32,19 @@ if SERVER then
 
 				-- generate a key value pair
 
-				local privateKey = encrypto.Crypter:GeneratePrimaryKey(1024)
-				local publicKey = encrypto.Crypter:GenerateSecondaryKey(1024)
+				local privateKey, privateKeyError = encrypto.Crypter:GeneratePrimaryKey(1024)
+				if (privateKey == nil) then print(privateKeyError) end
 
+				local publicKey, publicKeyError = encrypto.Crypter:GenerateSecondaryKey(privateKey)
+				if (publicKey == nil) then print(privateKeyError) end
 				-- add to the database
 
 				local insertNewKeys = sql.Query("INSERT INTO server_keys (ID, PrivateKey, PublicKey) VALUES ('outbound', '" .. privateKey .."', '" .. publicKey .. "'')")
 				print(sql.LastError())
 				
 				encrypto.serverKeys["outbound"] = {}
-				encrypto.serverKeys["outbound"]]["public_key"] = publicKey
-				encrypto.serverKeys["outbound"]]["private_key"] = privateKey
+				encrypto.serverKeys["outbound"]["public_key"] = publicKey
+				encrypto.serverKeys["outbound"]["private_key"] = privateKey
 
 
 				print("[ENCRYPTO] Successfully generated and inserted new server outbound pub/priv keys.")
@@ -87,8 +54,8 @@ if SERVER then
 				print("[ENCRYPTO] Loading outbound keys from database...")
 
 				encrypto.serverKeys["outbound"] = {}
-				encrypto.serverKeys["outbound"]]["public_key"] = outboundDBServerKeys["PublicKey"]
-				encrypto.serverKeys["outbound"]]["private_key"] = outboundDBServerKeys["PrivateKey"]
+				encrypto.serverKeys["outbound"]["public_key"] = outboundDBServerKeys["PublicKey"]
+				encrypto.serverKeys["outbound"]["private_key"] = outboundDBServerKeys["PrivateKey"]
 
 
 				print("[ENCRYPTO] Generating new outbound server keys..")
@@ -114,18 +81,20 @@ if SERVER then
 				print("[ENCRYPTO] Generating new inbound server keys..")
 
 				-- generate a key value pair
-
-				local privateKey = encrypto.Crypter:GeneratePrimaryKey(1024)
-				local publicKey = encrypto.Crypter:GenerateSecondaryKey(1024)
+				local privateKey, privateKeyError = encrypto.Crypter:GeneratePrimaryKey(1024)
+				if (privateKey == nil) then print(privateKeyError) end
+				
+				local publicKey, publicKeyError = encrypto.Crypter:GenerateSecondaryKey(privateKey)
+				if (publicKey == nil) then print(privateKeyError) end
 
 				-- add to the database
 
 				local insertNewKeys = sql.Query("INSERT INTO server_keys (ID, PrivateKey, PublicKey) VALUES ('inbound', '" .. privateKey .."', '" .. publicKey .. "'')")
-				print(sql.LastError())
+				print("SQL", sql.LastError())
 				
 				encrypto.serverKeys["inbound"] = {}
-				encrypto.serverKeys["inbound"]]["public_key"] = publicKey
-				encrypto.serverKeys["inbound"]]["private_key"] = privateKey
+				encrypto.serverKeys["inbound"]["public_key"] = publicKey
+				encrypto.serverKeys["inbound"]["private_key"] = privateKey
 
 
 				print("[ENCRYPTO] Successfully generated and inserted new server inbound pub/priv keys.")
@@ -135,8 +104,8 @@ if SERVER then
 				print("[ENCRYPTO] Loading inbound keys from database...")
 
 				encrypto.serverKeys["inbound"] = {}
-				encrypto.serverKeys["inbound"]]["public_key"] = inboundDBServerKeys["PublicKey"]
-				encrypto.serverKeys["inbound"]]["private_key"] = inboundDBServerKeys["PrivateKey"]
+				encrypto.serverKeys["inbound"]["public_key"] = inboundDBServerKeys["PublicKey"]
+				encrypto.serverKeys["inbound"]["private_key"] = inboundDBServerKeys["PrivateKey"]
 
 
 				print("[ENCRYPTO] Generating new inbound server keys..")
@@ -177,15 +146,15 @@ if SERVER then
 				print(sql.LastError())
 				
 				encrypto.playerKeys[safeSteamID] = {}
-				encrypto.playerKeys[safeSteamID]]["public_key"] = publicKey
-				encrypto.playerKeys[safeSteamID]]["private_key"] = privateKey
+				encrypto.playerKeys[safeSteamID]["public_key"] = publicKey
+				encrypto.playerKeys[safeSteamID]["private_key"] = privateKey
 
 			else
 
 				-- load the keys from the database to the RAM table.
 				encrypto.playerKeys[safeSteamID] = {}
-				encrypto.playerKeys[safeSteamID]]["public_key"] = dbPlayerKeys["PublicKey"]
-				encrypto.playerKeys[safeSteamID]]["private_key"] = dbPlayerKeys["PrivateKey"]
+				encrypto.playerKeys[safeSteamID]["public_key"] = dbPlayerKeys["PublicKey"]
+				encrypto.playerKeys[safeSteamID]["private_key"] = dbPlayerKeys["PrivateKey"]
 
 			end
 
@@ -205,13 +174,24 @@ if SERVER then
 	local decrptedData = encrypto.decryptAsServer("ENCRYPTED DATA")
 ]]
 	encrypto.encryptAsServer = function(pRawData)
-		local inboundPublicKey = encrypto.serverKeys["inbound"]["private_key"]
-		local outboundPrivateKey = encrypto.serverKeys["outbound"]["public_key"]
+		-- crypts primary key is the private key
+		-- crypt's secondary  key is the public key
 
-		encrypto.Crypter:
+
+		-- get the inbound public key
+		local inboundPublicKey = encrypto.serverKeys["inbound"]["public_key"]
+		 -- set the crypters public key to the inbound public key
+		encrypto.Crypter:SetSecondaryKey(inboundPrivateKey)
+		-- encrypt the data using the public key.
+		local encryptedData = encrypto.Crypter:Encrypt(pRawData)
+
+		local signature = encrypto.Hasher:CalculateDigest(pRawData)
+
+		print(encryptedData, signature)
+
 	end
 
-	encrpyto.decryptAsServer = function(pEncryptedData, pEncryptedDataSignature)
+	encrypto.decryptAsServer = function(pEncryptedData, pEncryptedDataSignature)
 	end
 
 
@@ -221,33 +201,44 @@ if SERVER then
 	end
 
 
-elseif CLIENT then
-
-	if (CheckGmClCryptInstalled()) then
+	-- Check that the binary is available.
+	if (CheckGmSvCryptInstalled()) then
 
 		encrypto.available = true
 
+		encrypto.playerKeys = {} -- for securing Net library calls. (CACHE)
+		-- encrypto.playerKeys["steamid"] = { "RSA pubkey". "RSA privkey" }
+		encrypto.serverKeys = {}
+		-- encrypto.serverKeys["outbound"]["public"] = "RSA pub key"
+		-- encrypto.serverKeys["outbound"]["private"] = "RSA priv key"
+		-- encrypto.serverKeys["inbound"]["public"] = "RSA pub key"
+		-- encrypto.serverKeys["inbound"]["private"] = "RSA priv key"
+
+
+
 		require("crypt")
-		
-		encrypto.Crypter = crypt.RSA()
 
-		print("[GM_CRYPT] Loaded clientside .dll", crypt.Version, encrypto.Crypter:AlgorithmName())
+		encrypto.Crypter = crypt.RSA() -- this is a class. eg. crypter = new RSA(), crypter->SetPrivateKey(), crypter->Encrypt()
+		encrypto.Hasher = crypt.SHA256()
 
+
+		print("[ENCRYPTO] Loaded gm_crypt", crypt.Version, encrypto.Crypter:AlgorithmName(), encrypto.Hasher:AlgorithmName())
+
+
+
+		local playerTableExists = sql.TableExists("player_keys")
+		local serverTableExists = sql.TableExists("server_keys")
+
+		if (!playerTableExists) then
+			sql.Query("CREATE TABLE player_keys (SteamID TEXT, PrivateKey TEXT, PublicKey TEXT)")
+		end
+
+		if (!serverTableExists) then
+			sql.Query("CREATE TABLE server_keys (ID TEXT, PrivateKey TEXT, PublicKey TEXT)")
+		end
+
+
+		encrypto.loadServerKeys()
 	end
 
-	encrypto.loadPrivateKey = function()
-		if (!encrypto.available) then return "" end
-	end
-
-	encrypto.loadPublicKey = function()
-		if (!encrypto.available) then return "" end
-	end
-
-	encrypto.generatePrivateKey = function()
-		if (!encrypto.available) then return "" end
-	end
-
-	encrypto.generatePublicKey = function()
-		if (!encrypto.available) then return "" end
-	end
 end

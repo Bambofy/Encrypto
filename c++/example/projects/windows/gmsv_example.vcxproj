@@ -93,6 +93,10 @@
     <ClInclude Include="..\..\..\include\CryptoPackage\mpuint.h" />
     <ClInclude Include="..\..\..\include\CryptoPackage\random.h" />
     <ClInclude Include="..\..\..\include\CryptoPackage\rsa.h" />
+    <ClInclude Include="..\..\..\include\CSPRNG\csprng.h" />
+    <ClInclude Include="..\..\..\include\CSPRNG\csprng.hpp" />
+    <ClInclude Include="..\..\..\include\CSPRNG\is_iterable.hpp" />
+    <ClInclude Include="..\..\..\include\ErrorHandler\ErrorHandler.h" />
     <ClInclude Include="..\..\..\include\GarrysMod\Lua\Interface.h" />
     <ClInclude Include="..\..\..\include\GarrysMod\Lua\LuaBase.h" />
     <ClInclude Include="..\..\..\include\GarrysMod\Lua\SourceCompat.h" />
@@ -100,6 +104,8 @@
     <ClInclude Include="..\..\..\include\GarrysMod\Lua\UserData.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\src\csprng.c" />
+    <ClCompile Include="..\..\src\csprng.cpp" />
     <ClCompile Include="..\..\src\euclid.cpp" />
     <ClCompile Include="..\..\src\gm_example.cpp" />
     <ClCompile Include="..\..\src\mpuint.cpp" />

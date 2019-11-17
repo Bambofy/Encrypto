@@ -1,14 +1,8 @@
 encrypto = {}
-
--- PrintTable(crypt)
-encrypto = {}
 encrypto.available = false
 
 function CheckGmSvCryptInstalled()
 	return (file.Exists("lua/bin/gmsv_crypt_win32.dll", "MOD"))
-end
-function CheckGmClCryptInstalled()
-	return (file.Exists("lua/bin/gmcl_crypt_win32.dll", "MOD"))
 end
 
 
@@ -32,23 +26,37 @@ if SERVER then
 
 				-- generate a key value pair
 
-				local privateKey, privateKeyError = encrypto.Crypter:GeneratePrimaryKey(1024)
-				if (privateKey == nil) then print(privateKeyError) end
+				local privateKeyReady = false
+				local publicKeyReady = false
+
+				local privateKey, privateKeyError = encrypto.Crypter:GeneratePrimaryKey(256)
+				if (privateKey == nil) then 
+					print(privateKeyError)
+					encyrpto.available = false -- disable the addon if not functioning
+				else
+					privateKeyReady = true
+				end
 
 				local publicKey, publicKeyError = encrypto.Crypter:GenerateSecondaryKey(privateKey)
-				if (publicKey == nil) then print(privateKeyError) end
+				if (publicKey == nil) then 
+					print(publicKeyError)
+					encyrpto.available = false -- disable the addon if not functioning
+				else
+					publicKeyReady = true
+				end
+
 				-- add to the database
+				if (privateKeyReady and publicKeyReady) then
+					local privateKeyHexString = encrypto.Crypter:ToHexString(privateKey)
+					local publicKeyHexString = encrypto.Crypter:ToHexString(publicKey)
 
-				local insertNewKeys = sql.Query("INSERT INTO server_keys (ID, PrivateKey, PublicKey) VALUES ('outbound', '" .. privateKey .."', '" .. publicKey .. "'')")
-				print(sql.LastError())
-				
-				encrypto.serverKeys["outbound"] = {}
-				encrypto.serverKeys["outbound"]["public_key"] = publicKey
-				encrypto.serverKeys["outbound"]["private_key"] = privateKey
-
-
-				print("[ENCRYPTO] Successfully generated and inserted new server outbound pub/priv keys.")
-
+					local insertNewKeys = sql.Query("INSERT INTO server_keys (ID, PrivateKey, PublicKey) VALUES ('outbound', '" .. privateKeyHexString .."', '" .. publicKeyHexString .. "')")
+					print(sql.LastError())
+					
+					encrypto.serverKeys["outbound"] = {}
+					encrypto.serverKeys["outbound"]["public_key"] = publicKeyHexString
+					encrypto.serverKeys["outbound"]["private_key"] = privateKeyHexString
+				end
 			else
 
 				print("[ENCRYPTO] Loading outbound keys from database...")
@@ -56,9 +64,6 @@ if SERVER then
 				encrypto.serverKeys["outbound"] = {}
 				encrypto.serverKeys["outbound"]["public_key"] = outboundDBServerKeys["PublicKey"]
 				encrypto.serverKeys["outbound"]["private_key"] = outboundDBServerKeys["PrivateKey"]
-
-
-				print("[ENCRYPTO] Generating new outbound server keys..")
 
 			end
 		end
@@ -81,21 +86,38 @@ if SERVER then
 				print("[ENCRYPTO] Generating new inbound server keys..")
 
 				-- generate a key value pair
-				local privateKey, privateKeyError = encrypto.Crypter:GeneratePrimaryKey(1024)
-				if (privateKey == nil) then print(privateKeyError) end
-				
+
+				local privateKeyReady = false
+				local publicKeyReady = false
+
+				local privateKey, privateKeyError = encrypto.Crypter:GeneratePrimaryKey(256)
+				if (privateKey == nil) then 
+					print(privateKeyError)
+					encyrpto.available = false -- disable the addon if not functioning
+				else
+					privateKeyReady = true
+				end
+
 				local publicKey, publicKeyError = encrypto.Crypter:GenerateSecondaryKey(privateKey)
-				if (publicKey == nil) then print(privateKeyError) end
+				if (publicKey == nil) then 
+					print(publicKeyError)
+					encyrpto.available = false -- disable the addon if not functioning
+				else
+					publicKeyReady = true
+				end
 
 				-- add to the database
-
-				local insertNewKeys = sql.Query("INSERT INTO server_keys (ID, PrivateKey, PublicKey) VALUES ('inbound', '" .. privateKey .."', '" .. publicKey .. "'')")
-				print("SQL", sql.LastError())
-				
-				encrypto.serverKeys["inbound"] = {}
-				encrypto.serverKeys["inbound"]["public_key"] = publicKey
-				encrypto.serverKeys["inbound"]["private_key"] = privateKey
-
+				if (privateKeyReady and publicKeyReady) then
+					local privateKeyHexString = encrypto.Crypter:ToHexString(privateKey)
+					local publicKeyHexString = encrypto.Crypter:ToHexString(publicKey)
+					
+					local insertNewKeys = sql.Query("INSERT INTO server_keys (ID, PrivateKey, PublicKey) VALUES ('inbound', '" .. privateKeyHexString .."', '" .. publicKeyHexString .. "')")
+					print(sql.LastError())
+					
+					encrypto.serverKeys["outbound"] = {}
+					encrypto.serverKeys["outbound"]["public_key"] = publicKeyHexString
+					encrypto.serverKeys["outbound"]["private_key"] = privateKeyHexString
+				end
 
 				print("[ENCRYPTO] Successfully generated and inserted new server inbound pub/priv keys.")
 
@@ -107,9 +129,6 @@ if SERVER then
 				encrypto.serverKeys["inbound"]["public_key"] = inboundDBServerKeys["PublicKey"]
 				encrypto.serverKeys["inbound"]["private_key"] = inboundDBServerKeys["PrivateKey"]
 
-
-				print("[ENCRYPTO] Generating new inbound server keys..")
-
 			end
 		end
 
@@ -117,52 +136,6 @@ if SERVER then
 
 	end
 
-
-	encrypto.loadPlayerKeys = function(pPlayer)
-
-		local steamId = pPlayer:SteamID()
-
-		local playerKeys = encrypto.playerKeys[pPlayer:SteamID()]
-
-		-- if the players keys is not in the local table cache
-		if (!playerKeys) then
-
-			local safeSteamID = sql.SQLStr(steamId)
-
-			local dbPlayerKeys = sql.QueryRow("SELECT * FROM player_keys WHERE SteamID=" .. safeSteamID)
-			print(sql.LastError())
-
-			-- if we don't have the keys in the database.
-			if (dbPlayerKeys == nil) then
-
-				-- generate a key value pair
-
-				local privateKey = encrypto.Crypter:GeneratePrimaryKey(1024)
-				local publicKey = encrypto.Crypter:GenerateSecondaryKey(1024)
-
-				-- add to the database
-
-				local insertNewKeys = sql.Query("INSERT INTO player_keys (SteamID, PrivateKey, PublicKey) VALUES (" .. safeSteamID .. ", '" .. privateKey .."', '" .. publicKey .. "'')")
-				print(sql.LastError())
-				
-				encrypto.playerKeys[safeSteamID] = {}
-				encrypto.playerKeys[safeSteamID]["public_key"] = publicKey
-				encrypto.playerKeys[safeSteamID]["private_key"] = privateKey
-
-			else
-
-				-- load the keys from the database to the RAM table.
-				encrypto.playerKeys[safeSteamID] = {}
-				encrypto.playerKeys[safeSteamID]["public_key"] = dbPlayerKeys["PublicKey"]
-				encrypto.playerKeys[safeSteamID]["private_key"] = dbPlayerKeys["PrivateKey"]
-
-			end
-
-		end
-
-		return encrypto.playerKeys[pPlayer:SteamID()]
-
-	end
 
 --[[
 	Usage:
@@ -179,9 +152,12 @@ if SERVER then
 
 
 		-- get the inbound public key
-		local inboundPublicKey = encrypto.serverKeys["inbound"]["public_key"]
+		local inboundPublicKeyHexString = encrypto.serverKeys["inbound"]["public_key"]
+		local inboundPublicKey = encrypto.Crypter:FromHexString(inboundPublicKeyHexString)
+
 		 -- set the crypters public key to the inbound public key
-		encrypto.Crypter:SetSecondaryKey(inboundPrivateKey)
+		encrypto.Crypter:SetSecondaryKey(inboundPublicKey)
+
 		-- encrypt the data using the public key.
 		local encryptedData = encrypto.Crypter:Encrypt(pRawData)
 
@@ -206,8 +182,6 @@ if SERVER then
 
 		encrypto.available = true
 
-		encrypto.playerKeys = {} -- for securing Net library calls. (CACHE)
-		-- encrypto.playerKeys["steamid"] = { "RSA pubkey". "RSA privkey" }
 		encrypto.serverKeys = {}
 		-- encrypto.serverKeys["outbound"]["public"] = "RSA pub key"
 		-- encrypto.serverKeys["outbound"]["private"] = "RSA priv key"
@@ -224,14 +198,7 @@ if SERVER then
 
 		print("[ENCRYPTO] Loaded gm_crypt", crypt.Version, encrypto.Crypter:AlgorithmName(), encrypto.Hasher:AlgorithmName())
 
-
-
-		local playerTableExists = sql.TableExists("player_keys")
 		local serverTableExists = sql.TableExists("server_keys")
-
-		if (!playerTableExists) then
-			sql.Query("CREATE TABLE player_keys (SteamID TEXT, PrivateKey TEXT, PublicKey TEXT)")
-		end
 
 		if (!serverTableExists) then
 			sql.Query("CREATE TABLE server_keys (ID TEXT, PrivateKey TEXT, PublicKey TEXT)")

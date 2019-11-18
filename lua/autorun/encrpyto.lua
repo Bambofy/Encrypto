@@ -4,19 +4,19 @@ encrypto.available = false
 
 if SERVER then
 
-	encrypto.toByteList = function(pByteString)
+	encrypto.toByteListString = function(pByteString)
 		local byteArray = {string.byte(pByteString, 1, string.len(pByteString))} -- convert vararg to table
 		return table.concat(byteArray, ",")
 	end
 
-	encrypto.fromByteList = function(pByteList)
+	encrypto.fromByteListString = function(pByteList)
 		local byteArray = string.Explode(",", pByteList)
 
 		local byteString = ""
 		for k,v in ipairs(byteArray) do
 			byteString = byteString .. string.format("%c", v)
 		end
-		
+
 		return byteString
 	end
 
@@ -34,17 +34,19 @@ if SERVER then
 
 			if (outboundDBServerKeys == nil) then
 
-				print("[ENCRYPTO] Generating new outbound server keys..")
+				print("[ENCRYPTO] Generating new server keys..")
 
 				-- generate a key value pair
 
 				local privateKeyReady = false
 				local publicKeyReady = false
+				local sessionKeyReady = false
+				local sessionKeyIVReady = false
 
-				local privateKey, privateKeyError = encrypto.Crypter:GeneratePrimaryKey(256)
+				local privateKey, privateKeyError = encrypto.Crypter:GeneratePrimaryKey(1024)
 				if (privateKey == nil) then 
 					print(privateKeyError)
-					encyrpto.available = false -- disable the addon if not functioning
+					encrypto.available = false -- disable the addon if not functioning
 				else
 					privateKeyReady = true
 				end
@@ -52,95 +54,72 @@ if SERVER then
 				local publicKey, publicKeyError = encrypto.Crypter:GenerateSecondaryKey(privateKey)
 				if (publicKey == nil) then 
 					print(publicKeyError)
-					encyrpto.available = false -- disable the addon if not functioning
+					encrypto.available = false -- disable the addon if not functioning
 				else
 					publicKeyReady = true
 				end
 
-				-- add to the database
-				if (privateKeyReady and publicKeyReady) then
+				local sessionKey, sessionKeyError = encrypto.SessionCrypter:GeneratePrimaryKey(256)
+				if (sessionKeyError) then
+					print(sessionKey)
+					encrypto.available = false
+				else
+					sessionKeyReady = true
+				end
 
-					local insertNewKeys = sql.Query("INSERT INTO server_keys (ID, PrivateKey, PublicKey) VALUES ('outbound', '" .. privateKeyHexString .."', '" .. publicKeyHexString .. "')")
+				local sessionKeyIV, sessionKeyIVError = encrypto.SessionCrypter:GenerateSecondaryKey(256)
+				if (sessionKeyIVError) then
+					print(sessionKeyIVError)
+					encrypto.available = false
+				else
+					sessionKeyIVReady = true
+				end
+
+				-- add to the database
+				if (privateKeyReady and publicKeyReady and sessionKeyReady and sessionKeyIVReady) then
+
+					local insertNewKeys = sql.Query("INSERT INTO server_keys (PrivateKey, PublicKey) VALUES ('" .. encrypto.toByteListString(privateKey) .."', '" .. encrypto.toByteListString(publicKey) .. "')")
 					print(sql.LastError())
 					
-					encrypto.serverKeys["outbound"] = {}
-					encrypto.serverKeys["outbound"]["public_key"] = publicKeyHexString
-					encrypto.serverKeys["outbound"]["private_key"] = privateKeyHexString
+					encrypto.serverKeys = {}
+					encrypto.serverKeys["public_key"] = publicKey
+					encrypto.serverKeys["private_key"] = privateKey
+					encrypto.serverKeys["session_key"] = sessionKey
+					encrypto.serverKeys["session_key_iv"] = sessionKeyIV
 				end
 			else
 
 				print("[ENCRYPTO] Loading outbound keys from database...")
 
-				encrypto.serverKeys["outbound"] = {}
-				encrypto.serverKeys["outbound"]["public_key"] = outboundDBServerKeys["PublicKey"]
-				encrypto.serverKeys["outbound"]["private_key"] = outboundDBServerKeys["PrivateKey"]
+				local sessionKeyReady = false
+				local sessionKeyIVReady = false
+
+				local sessionKey, sessionKeyError = encrypto.SessionCrypter:GeneratePrimaryKey(256)
+				if (sessionKeyError) then
+					print(sessionKey)
+					encrypto.available = false
+				else
+					sessionKeyReady = true
+				end
+
+				local sessionKeyIV, sessionKeyIVError = encrypto.SessionCrypter:GenerateSecondaryKey(256)
+				if (sessionKeyIVError) then
+					print(sessionKeyIVError)
+					encrypto.available = false
+				else
+					sessionKeyIVReady = true
+				end
+
+				encrypto.serverKeys = {}
+				encrypto.serverKeys["public_key"] = outboundDBServerKeys["PublicKey"]
+				encrypto.serverKeys["private_key"] = outboundDBServerKeys["PrivateKey"]
+				encrypto.serverKeys["session_key"] = sessionKey
+				encrypto.serverKeys["session_key_iv"] = sessionKeyIV
 
 			end
 		end
 
 		print("[ENCRYPTO] Completed loading outbound server keys.")
-
-
-		print("[ENCRYPTO] Loading inbound server keys..")
-
-		local inboundKeys = encrypto.serverKeys["inbound"]
-
-		if (!inboundKeys) then
-
-			-- do keys exist in db?
-			local inboundDBServerKeys = sql.QueryRow("SELECT * FROM server_keys WHERE ID='inbound'")
-			print(sql.LastError())
-
-			if (inboundDBServerKeys == nil) then
-
-				print("[ENCRYPTO] Generating new inbound server keys..")
-
-				-- generate a key value pair
-
-				local privateKeyReady = false
-				local publicKeyReady = false
-
-				local privateKey, privateKeyError = encrypto.Crypter:GeneratePrimaryKey(256)
-				if (privateKey == nil) then 
-					print(privateKeyError)
-					encyrpto.available = false -- disable the addon if not functioning
-				else
-					privateKeyReady = true
-				end
-
-				local publicKey, publicKeyError = encrypto.Crypter:GenerateSecondaryKey(privateKey)
-				if (publicKey == nil) then 
-					print(publicKeyError)
-					encyrpto.available = false -- disable the addon if not functioning
-				else
-					publicKeyReady = true
-				end
-
-				-- add to the database
-				if (privateKeyReady and publicKeyReady) then
-					local insertNewKeys = sql.Query("INSERT INTO server_keys (ID, PrivateKey, PublicKey) VALUES ('inbound', '" .. privateKeyHexString .."', '" .. publicKeyHexString .. "')")
-					print(sql.LastError())
-					
-					encrypto.serverKeys["outbound"] = {}
-					encrypto.serverKeys["outbound"]["public_key"] = publicKeyHexString
-					encrypto.serverKeys["outbound"]["private_key"] = privateKeyHexString
-				end
-
-				print("[ENCRYPTO] Successfully generated and inserted new server inbound pub/priv keys.")
-
-			else
-
-				print("[ENCRYPTO] Loading inbound keys from database...")
-
-				encrypto.serverKeys["inbound"] = {}
-				encrypto.serverKeys["inbound"]["public_key"] = inboundDBServerKeys["PublicKey"]
-				encrypto.serverKeys["inbound"]["private_key"] = inboundDBServerKeys["PrivateKey"]
-
-			end
-		end
-
-		print("[ENCRYPTO] Completed loading inbound server keys.")
-
 	end
 
 
@@ -195,16 +174,20 @@ if SERVER then
 		encrypto.serverKeys = {}
 
 		encrypto.Crypter = crypt.RSA() -- this is a class. eg. crypter = new RSA(), crypter->SetPrivateKey(), crypter->Encrypt()
-		encrypto.Hasher = crypt.SHA256()
+		encrypto.SessionCrypter = crypt.AES() -- this is a class. eg. crypter = new RSA(), crypter->SetPrivateKey(), crypter->Encrypt()
 
 
-		print("[ENCRYPTO] Loaded gm_crypt", crypt.Version, encrypto.Crypter:AlgorithmName(), encrypto.Hasher:AlgorithmName())
+		print("[ENCRYPTO] Loaded gm_crypt", crypt.Version, encrypto.Crypter:AlgorithmName(),  encrypto.SessionCrypter:AlgorithmName())
 
 		local serverTableExists = sql.TableExists("server_keys")
 
 		if (!serverTableExists) then
 			sql.Query("CREATE TABLE server_keys (ID TEXT, PrivateKey TEXT, PublicKey TEXT)")
+		else
+			sql.Query("DROP TABLE server_keys")
+			sql.Query("CREATE TABLE server_keys (ID TEXT, PrivateKey TEXT, PublicKey TEXT)")
 		end
+
 
 
 		encrypto.loadServerKeys()

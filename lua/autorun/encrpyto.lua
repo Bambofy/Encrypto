@@ -57,7 +57,7 @@ if SERVER then
 					publicKeyReady = true
 				end
 
-				local sessionKey, sessionKeyError = encrypto.SessionCrypter:GeneratePrimaryKey(256)
+				local sessionKey, sessionKeyError = encrypto.EncryptionSessionCrypter:GeneratePrimaryKey(256)
 				if (sessionKeyError) then
 					print(sessionKey)
 					encrypto.available = false
@@ -65,7 +65,7 @@ if SERVER then
 					sessionKeyReady = true
 				end
 
-				local sessionKeyIV, sessionKeyIVError = encrypto.SessionCrypter:GenerateSecondaryKey(256)
+				local sessionKeyIV, sessionKeyIVError = encrypto.EncryptionSessionCrypter:GenerateSecondaryKey(256)
 				if (sessionKeyIVError) then
 					print(sessionKeyIVError)
 					encrypto.available = false
@@ -95,7 +95,7 @@ if SERVER then
 				local sessionKeyReady = false
 				local sessionKeyIVReady = false
 
-				local sessionKey, sessionKeyError = encrypto.SessionCrypter:GeneratePrimaryKey(256)
+				local sessionKey, sessionKeyError = encrypto.EncryptionSessionCrypter:GeneratePrimaryKey(256)
 				if (sessionKeyError) then
 					print(sessionKey)
 					encrypto.available = false
@@ -103,7 +103,7 @@ if SERVER then
 					sessionKeyReady = true
 				end
 
-				local sessionKeyIV, sessionKeyIVError = encrypto.SessionCrypter:GenerateSecondaryKey(256)
+				local sessionKeyIV, sessionKeyIVError = encrypto.EncryptionSessionCrypter:GenerateSecondaryKey(256)
 				if (sessionKeyIVError) then
 					print(sessionKeyIVError)
 					encrypto.available = false
@@ -147,21 +147,21 @@ if SERVER then
 		local sessionKey = encrypto.serverKeys["session_key"]
 		local sessionKeyIV = encrypto.serverKeys["session_key_iv"]
 
-		local sessionKeyIVSuccess, sessionKeyIVErr = encrypto.SessionCrypter:SetSecondaryKey(sessionKeyIV)
+		local sessionKeyIVSuccess, sessionKeyIVErr = encrypto.EncryptionSessionCrypter:SetSecondaryKey(sessionKeyIV)
 		if (!sessionKeyIVSuccess) then
 			print(sessionKeyIVErr)
 			encrypto.available = false
 			return pRawData
 		end
 
-		local sessionKeySuccess, sessionKeyErr = encrypto.SessionCrypter:SetPrimaryKey(sessionKey)
+		local sessionKeySuccess, sessionKeyErr = encrypto.EncryptionSessionCrypter:SetPrimaryKey(sessionKey)
 		if (!sessionKeySuccess) then
 			print(sessionKeyErr)
 			encrypto.available = false
 			return pRawData
 		end
 		
-		local encryptedData, encryptedDataErr = encrypto.SessionCrypter:Encrypt(pRawData)
+		local encryptedData, encryptedDataErr = encrypto.EncryptionSessionCrypter:Encrypt(pRawData)
 		if (encryptedData == nil) then
 			print(encryptedDataErr)
 			encrypto.available = false
@@ -181,9 +181,41 @@ if SERVER then
 		local encryptedSessionKey = encrypto.Crypter:Encrypt(completeSessionKey)
 
 
+		local encryptedDataPacket = encryptedSessionKey .. encryptedData
+
+		return encryptedDataPacket
 	end
 
-	encrypto.decrypt = function(pEncryptedData, pEncryptedDataSignature)
+	encrypto.decrypt = function(pEncryptedData)
+		-- the encrypted data is the encrypted session key and the encrypted data together.
+
+		-- encrypted session key equals the session key IV + sessionKey which totals 64 bytes.
+		local encryptedSessionKeyIV = string.sub(pEncryptedData, 1, 64)-- first 64 bytes are the key and IV
+		local encryptedData = string.sub(pEncryptedData, 64) 			-- remainig bytes are the encrypted data
+
+		-- decrypt the session key and iv using the RSA crypter
+		local privateKey = encrypto.serverKeys["private_key"]
+
+		local primaryKeySuccess, privateKeyErr = encrypto.Crypter:SetPrimaryKey(privateKey)
+		if (!primaryKeySuccess) then
+			print(privateKeyErr)
+			encrypto.available = false
+			return pRawData
+		end
+
+		local decryptedSessionKeyIV, sessionKeyIVDecryptionErr = encrypto.Crypter:Decrypt(encryptedSessionKeyIV)
+		if (decryptedSessionKeyIV == nil) then
+			print(sessionKeyIVDecryptionErr)
+			encrypto.available = false
+			return pRawData
+		end
+
+
+		-- set up session
+
+
+
+		--local sessionKey = 
 	end
 
 
@@ -199,10 +231,10 @@ if SERVER then
 		encrypto.serverKeysLoaded = false
 
 		encrypto.Crypter = crypt.RSA() -- this is a class. eg. crypter = new RSA(), crypter->SetPrivateKey(), crypter->Encrypt()
-		encrypto.SessionCrypter = crypt.AES() -- this is a class. eg. crypter = new RSA(), crypter->SetPrivateKey(), crypter->Encrypt()
+		encrypto.EncryptionSessionCrypter = crypt.AES() -- this is a class. eg. crypter = new RSA(), crypter->SetPrivateKey(), crypter->Encrypt()
+		encrypto.DecryptionSessionCrypter = crypt.AES() -- this oneis used to decrypt, since the paramters are given in the encrypted data.
 
-
-		print("[ENCRYPTO] Loaded gm_crypt", crypt.Version, encrypto.Crypter:AlgorithmName(),  encrypto.SessionCrypter:AlgorithmName())
+		print("[ENCRYPTO] Loaded gm_crypt", crypt.Version, encrypto.Crypter:AlgorithmName(),  encrypto.EncryptionSessionCrypter:AlgorithmName(),  encrypto.DecryptionSessionCrypter:AlgorithmName())
 
 		local serverTableExists = sql.TableExists("server_keys")
 
@@ -218,6 +250,8 @@ if SERVER then
 		encrypto.loadServerKeys()
 		local encryptedData = encrypto.encrypt("hello world")
 		print(encryptedData)
+		local decryptedData = encrypto.decrypt(encryptedData)
+		print(decryptedData)
 	end
 
 end

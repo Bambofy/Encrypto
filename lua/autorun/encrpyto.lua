@@ -4,6 +4,22 @@ encrypto.available = false
 
 if SERVER then
 
+	encrypto.toByteList = function(pByteString)
+		local byteArray = {string.byte(pByteString, 1, string.len(pByteString))} -- convert vararg to table
+		return table.concat(byteArray, ",")
+	end
+
+	encrypto.fromByteList = function(pByteList)
+		local byteArray = string.Explode(",", pByteList)
+
+		local byteString = ""
+		for k,v in ipairs(byteArray) do
+			byteString = byteString .. string.format("%c", v)
+		end
+		
+		return byteString
+	end
+
 	encrypto.loadServerKeys = function()
 
 		print("[ENCRYPTO] Loading outbound server keys..")

@@ -5,7 +5,8 @@ encrypto.available = false
 if SERVER then
 
 	encrypto.toByteListString = function(pByteString)
-		local byteArray = {string.byte(pByteString, 1, string.len(pByteString))} -- convert vararg to table
+		local byteArray = {string.byte(pByteString, 1, string.len(pByteString)+1 )} -- convert vararg to table
+		print(#byteArray)
 		return table.concat(byteArray, ",")
 	end
 
@@ -14,7 +15,7 @@ if SERVER then
 
 		local byteString = ""
 		for k,v in ipairs(byteArray) do
-			byteString = byteString .. string.format("%c", v)
+			byteString = byteString .. string.char(v)
 		end
 
 		return byteString
@@ -27,10 +28,10 @@ if SERVER then
 		if (!encrypto.serverKeysLoaded) then
 
 			-- do keys exist in db?
-			local outboundDBServerKeys = sql.QueryRow("SELECT * FROM server_keys")
+			local DBServerKeys = sql.QueryRow("SELECT * FROM server_keys")
 			print(sql.LastError())
 
-			if (outboundDBServerKeys == nil) then
+			if (DBServerKeys == nil) or (!DBServerKeys) then
 
 				print("[ENCRYPTO] Generating new server keys..")
 
@@ -77,7 +78,15 @@ if SERVER then
 				-- add to the database
 				if (privateKeyReady and publicKeyReady and sessionKeyReady and sessionKeyIVReady) then
 
-					local insertNewKeys = sql.Query("INSERT INTO server_keys (PrivateKey, PublicKey) VALUES ('" .. encrypto.toByteListString(privateKey) .."', '" .. encrypto.toByteListString(publicKey) .. "')")
+					print("Before byte list len: ", string.len(privateKey))
+
+					local afterByteList = encrypto.toByteListString(privateKey)
+
+					local afterByteList = encrypto.fromByteListString(afterByteList)
+
+					print("After byte list len: ", string.len(afterByteList))
+
+					--local insertNewKeys = sql.Query("INSERT INTO server_keys (PrivateKey, PublicKey) VALUES ('" .. encrypto.toByteListString(privateKey) .."', '" .. encrypto.toByteListString(publicKey) .. "')")
 					print(sql.LastError())
 					
 					encrypto.serverKeys = {}
@@ -114,8 +123,8 @@ if SERVER then
 
 				if (sessionKeyReady and sessionKeyIVReady) then
 					encrypto.serverKeys = {}
-					encrypto.serverKeys["public_key"] = outboundDBServerKeys["PublicKey"]
-					encrypto.serverKeys["private_key"] = outboundDBServerKeys["PrivateKey"]
+					encrypto.serverKeys["public_key"] = encrypto.fromByteListString(DBServerKeys["PublicKey"])
+					encrypto.serverKeys["private_key"] = encrypto.fromByteListString(DBServerKeys["PrivateKey"])
 					encrypto.serverKeys["session_key"] = sessionKey
 					encrypto.serverKeys["session_key_iv"] = sessionKeyIV
 					encrypto.serverKeysLoaded = false
@@ -150,30 +159,32 @@ if SERVER then
 
 		local sessionKeyIVSuccess, sessionKeyIVErr = encrypto.EncryptionSessionCrypter:SetSecondaryKey(sessionKeyIV)
 		if (!sessionKeyIVSuccess) then
-			print(sessionKeyIVErr)
+			print("Session Key IV Error", sessionKeyIVErr)
 			encrypto.available = false
 			return pRawData
 		end
 
 		local sessionKeySuccess, sessionKeyErr = encrypto.EncryptionSessionCrypter:SetPrimaryKey(sessionKey)
 		if (!sessionKeySuccess) then
-			print(sessionKeyErr)
+			print("Session Key Error", sessionKeyErr)
 			encrypto.available = false
 			return pRawData
 		end
 		
 		local encryptedData, encryptedDataErr = encrypto.EncryptionSessionCrypter:Encrypt(pRawData)
 		if (encryptedData == nil) then
-			print(encryptedDataErr)
+			print("Encrypted Data Error", encryptedDataErr)
 			encrypto.available = false
 			return pRawData
 		end
 
 		-- encrypt session key with RSA keys
 		local publicKey = encrypto.serverKeys["public_key"]
+
 		local publicKeySuccess, publicKeyErr = encrypto.Crypter:SetSecondaryKey(publicKey)
+
 		if (!publicKeySuccess) then
-			print(publicKeyErr)
+			print("Public Key Error", publicKeyErr)
 			encrypto.available = false
 			return pRawData
 		end
@@ -200,7 +211,7 @@ if SERVER then
 
 		local primaryKeySuccess, privateKeyErr = encrypto.Crypter:SetPrimaryKey(privateKey)
 		if (!primaryKeySuccess) then
-			print(privateKeyErr)
+			print("Decrypting Private Key Error", privateKeyErr)
 			encrypto.available = false
 			return pEncryptedData
 		end
@@ -272,8 +283,8 @@ if SERVER then
 		if (!serverTableExists) then
 			sql.Query("CREATE TABLE server_keys (ID TEXT, PrivateKey TEXT, PublicKey TEXT)")
 		else
-			sql.Query("DROP TABLE server_keys")
-			sql.Query("CREATE TABLE server_keys (ID TEXT, PrivateKey TEXT, PublicKey TEXT)")
+			--sql.Query("DROP TABLE server_keys")
+			--sql.Query("CREATE TABLE server_keys (ID TEXT, PrivateKey TEXT, PublicKey TEXT)")
 		end
 
 
@@ -281,7 +292,7 @@ if SERVER then
 		encrypto.loadServerKeys()
 		local encryptedData = encrypto.encrypt("hello world")
 		--print(encryptedData)
-		local decryptedData = encrypto.decrypt(encryptedData)
+		--local decryptedData = encrypto.decrypt(encryptedData)
 		--print(decryptedData)
 	end
 

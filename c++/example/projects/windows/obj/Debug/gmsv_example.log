@@ -1,2 +1,15 @@
 ﻿  gm_example.cpp
+C:\Users\Richa\Documents\GitHub\Encrypto\c++\example\src\gm_example.cpp(24,20): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Richa\Documents\GitHub\Encrypto\c++\example\src\gm_example.cpp(71,1): warning C4996: 'strncpy': This function or variable may be unsafe. Consider using strncpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\ucrt\string.h(338): message : see declaration of 'strncpy'
+C:\Users\Richa\Documents\GitHub\Encrypto\c++\example\src\gm_example.cpp(72,1): warning C4996: 'strncpy': This function or variable may be unsafe. Consider using strncpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\ucrt\string.h(338): message : see declaration of 'strncpy'
+C:\Users\Richa\Documents\GitHub\Encrypto\c++\example\src\gm_example.cpp(139,1): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\ucrt\string.h(133): message : see declaration of 'strcpy'
+C:\Users\Richa\Documents\GitHub\Encrypto\c++\example\src\gm_example.cpp(140,1): warning C4996: 'strcat': This function or variable may be unsafe. Consider using strcat_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\ucrt\string.h(90): message : see declaration of 'strcat'
+C:\Users\Richa\Documents\GitHub\Encrypto\c++\example\src\gm_example.cpp(143,1): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\ucrt\string.h(133): message : see declaration of 'strcpy'
+C:\Users\Richa\Documents\GitHub\Encrypto\c++\example\src\gm_example.cpp(144,1): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\ucrt\string.h(133): message : see declaration of 'strcpy'
   gmsv_example.vcxproj -> C:\Users\Richa\Documents\GitHub\Encrypto\c++\example\projects\windows\..\..\build\gmsv_example_win32.dll

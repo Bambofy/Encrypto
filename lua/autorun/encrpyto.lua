@@ -65,6 +65,7 @@ if SERVER then
 					sessionKeyReady = true
 				end
 
+
 				local sessionKeyIV, sessionKeyIVError = encrypto.EncryptionSessionCrypter:GenerateSecondaryKey(256)
 				if (sessionKeyIVError) then
 					print(sessionKeyIVError)
@@ -177,9 +178,10 @@ if SERVER then
 			return pRawData
 		end
 
-		local completeSessionKey = sessionKeyIV .. sessionKey
-		local encryptedSessionKey = encrypto.Crypter:Encrypt(completeSessionKey)
+		local completeSessionKey = sessionKeyIV .. sessionKey -- 64 bytes
+		local encryptedSessionKey = encrypto.Crypter:Encrypt(completeSessionKey) -- ups to 128 bytes
 
+		--print("session key length", encryptedSessionKey:len())
 
 		local encryptedDataPacket = encryptedSessionKey .. encryptedData
 
@@ -189,9 +191,9 @@ if SERVER then
 	encrypto.decrypt = function(pEncryptedData)
 		-- the encrypted data is the encrypted session key and the encrypted data together.
 
-		-- encrypted session key equals the session key IV + sessionKey which totals 64 bytes.
-		local encryptedSessionKeyIV = string.sub(pEncryptedData, 1, 64)-- first 64 bytes are the key and IV
-		local encryptedData = string.sub(pEncryptedData, 64) 			-- remainig bytes are the encrypted data
+		-- encrypted session key equals the session key IV + sessionKey which totals 64 bytes and then encrypted makes 128 bytes
+		local encryptedCombinedSessionKeyIV = string.sub(pEncryptedData, 1, 128)-- first 128 bytes are the encrypted key and IV
+		local encryptedData = string.sub(pEncryptedData, 129) 			-- remainig bytes are the encrypted data
 
 		-- decrypt the session key and iv using the RSA crypter
 		local privateKey = encrypto.serverKeys["private_key"]
@@ -200,22 +202,51 @@ if SERVER then
 		if (!primaryKeySuccess) then
 			print(privateKeyErr)
 			encrypto.available = false
+			return pEncryptedData
+		end
+
+		local publicKey = encrypto.serverKeys["public_key"]
+		local publicKeySuccess, publicKeyErr = encrypto.Crypter:SetSecondaryKey(publicKey)
+		if (!publicKeySuccess) then
+			print(publicKeyErr)
+			encrypto.available = false
 			return pRawData
 		end
 
-		local decryptedSessionKeyIV, sessionKeyIVDecryptionErr = encrypto.Crypter:Decrypt(encryptedSessionKeyIV)
-		if (decryptedSessionKeyIV == nil) then
-			print(sessionKeyIVDecryptionErr)
+		local decryptedCombinedSessionKey, sessionCombinedKeyDecryptionErr = encrypto.Crypter:Decrypt(encryptedCombinedSessionKeyIV)
+		if (decryptedCombinedSessionKey == nil) then
+			print(sessionCombinedKeyDecryptionErr)
+			encrypto.available = false
+			return pEncryptedData
+		end
+
+		-- decode the combined session key into 2
+		-- 64 bytes long decrypted, 32 bytes IV then 32 bytes key
+		local sessionKeyIV = string.sub(decryptedCombinedSessionKey, 1, 32)
+		local sessionKey = string.sub(decryptedCombinedSessionKey, 33)
+
+		-- set up session crypter and decrypted the encrypted data part
+
+		local sessionKeyIVSuccess, sessionKeyIVErr = encrypto.DecryptionSessionCrypter:SetSecondaryKey(sessionKeyIV) 		-- WARNING: the must be the decryption session crypter NOT encryption session crypter
+		if (!sessionKeyIVSuccess) then
+			print(sessionKeyIVErr)
+			encrypto.available = false
+			return pRawData
+		end
+
+		local sessionKeySuccess, sessionKeyErr = encrypto.DecryptionSessionCrypter:SetPrimaryKey(sessionKey)
+		if (!sessionKeySuccess) then
+			print(sessionKeyErr)
 			encrypto.available = false
 			return pRawData
 		end
 
 
-		-- set up session
+		-- use the session key to decrypt the data part.
 
-
-
-		--local sessionKey = 
+		local decryptedData = encrypto.DecryptionSessionCrypter:Decrypt(encryptedData)
+		
+		return decryptedData
 	end
 
 
@@ -249,9 +280,9 @@ if SERVER then
 
 		encrypto.loadServerKeys()
 		local encryptedData = encrypto.encrypt("hello world")
-		print(encryptedData)
+		--print(encryptedData)
 		local decryptedData = encrypto.decrypt(encryptedData)
-		print(decryptedData)
+		--print(decryptedData)
 	end
 
 end

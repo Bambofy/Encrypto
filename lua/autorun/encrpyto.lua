@@ -138,7 +138,7 @@ if SERVER then
 	local decryptedData, signatureValid = encrypto.decryptAsServer("ENCRYPTED DATA", "ENCRYPTED DATA SIGNATURE")
 	local decrptedData = encrypto.decryptAsServer("ENCRYPTED DATA")
 ]]
-	encrypto.encryptAsServer = function(pRawData)
+	encrypto.encrypt = function(pRawData)
 		if (!encrypto.available) then return end
 		-- crypts primary key is the private key
 		-- crypt's secondary  key is the public key
@@ -155,36 +155,35 @@ if SERVER then
 		end
 
 		local sessionKeySuccess, sessionKeyErr = encrypto.SessionCrypter:SetPrimaryKey(sessionKey)
-		encrypto.SessionCrypter:Encrypt()
+		if (!sessionKeySuccess) then
+			print(sessionKeyErr)
+			encrypto.available = false
+			return pRawData
+		end
+		
+		local encryptedData, encryptedDataErr = encrypto.SessionCrypter:Encrypt(pRawData)
+		if (encryptedData == nil) then
+			print(encryptedDataErr)
+			encrypto.available = false
+			return pRawData
+		end
 
 		-- encrypt session key with RSA keys
+		local publicKey = encrypto.serverKeys["public_key"]
+		local publicKeySuccess, publicKeyErr = encrypto.Crypter:SetSecondaryKey(publicKey)
+		if (!publicKeySuccess) then
+			print(publicKeyErr)
+			encrypto.available = false
+			return pRawData
+		end
 
-		-- send the encrypted key and encrypted data together to be seperated later.
+		local completeSessionKey = sessionKeyIV .. sessionKey
+		local encryptedSessionKey = encrypto.Crypter:Encrypt(completeSessionKey)
 
-
-		-- get the inbound public key
-		local inboundPublicKeyHexString = encrypto.serverKeys["inbound"]["public_key"]
-		local inboundPublicKey = encrypto.Crypter:FromHexString(inboundPublicKeyHexString)
-
-		 -- set the crypters public key to the inbound public key
-		encrypto.Crypter:SetSecondaryKey(inboundPublicKey)
-
-		-- encrypt the data using the public key.
-		local encryptedData = encrypto.Crypter:Encrypt(pRawData)
-
-		local signature = encrypto.Hasher:CalculateDigest(pRawData)
-
-		print(encryptedData, signature)
 
 	end
 
-	encrypto.decryptAsServer = function(pEncryptedData, pEncryptedDataSignature)
-	end
-
-
-	encrypto.encryptAsPlayer = function(pData, pPlayer)
-
-
+	encrypto.decrypt = function(pEncryptedData, pEncryptedDataSignature)
 	end
 
 
@@ -217,6 +216,8 @@ if SERVER then
 
 
 		encrypto.loadServerKeys()
+		local encryptedData = encrypto.encrypt("hello world")
+		print(encryptedData)
 	end
 
 end

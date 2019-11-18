@@ -1,10 +1,6 @@
 encrypto = {}
 encrypto.available = false
 
-function CheckGmSvCryptInstalled()
-	return (file.Exists("lua/bin/gmsv_crypt_win32.dll", "MOD"))
-end
-
 
 if SERVER then
 
@@ -47,8 +43,6 @@ if SERVER then
 
 				-- add to the database
 				if (privateKeyReady and publicKeyReady) then
-					local privateKeyHexString = encrypto.Crypter:ToHexString(privateKey)
-					local publicKeyHexString = encrypto.Crypter:ToHexString(publicKey)
 
 					local insertNewKeys = sql.Query("INSERT INTO server_keys (ID, PrivateKey, PublicKey) VALUES ('outbound', '" .. privateKeyHexString .."', '" .. publicKeyHexString .. "')")
 					print(sql.LastError())
@@ -108,9 +102,6 @@ if SERVER then
 
 				-- add to the database
 				if (privateKeyReady and publicKeyReady) then
-					local privateKeyHexString = encrypto.Crypter:ToHexString(privateKey)
-					local publicKeyHexString = encrypto.Crypter:ToHexString(publicKey)
-					
 					local insertNewKeys = sql.Query("INSERT INTO server_keys (ID, PrivateKey, PublicKey) VALUES ('inbound', '" .. privateKeyHexString .."', '" .. publicKeyHexString .. "')")
 					print(sql.LastError())
 					
@@ -178,19 +169,14 @@ if SERVER then
 
 
 	-- Check that the binary is available.
-	if (CheckGmSvCryptInstalled()) then
-
-		encrypto.available = true
-
-		encrypto.serverKeys = {}
-		-- encrypto.serverKeys["outbound"]["public"] = "RSA pub key"
-		-- encrypto.serverKeys["outbound"]["private"] = "RSA priv key"
-		-- encrypto.serverKeys["inbound"]["public"] = "RSA pub key"
-		-- encrypto.serverKeys["inbound"]["private"] = "RSA priv key"
-
+	if file.Exists("lua/bin/gmsv_crypt_win32.dll", "MOD") then
 
 
 		require("crypt")
+		
+		encrypto.available = true
+
+		encrypto.serverKeys = {}
 
 		encrypto.Crypter = crypt.RSA() -- this is a class. eg. crypter = new RSA(), crypter->SetPrivateKey(), crypter->Encrypt()
 		encrypto.Hasher = crypt.SHA256()

@@ -78,14 +78,6 @@ if SERVER then
 				-- add to the database
 				if (privateKeyReady and publicKeyReady and sessionKeyReady and sessionKeyIVReady) then
 
-					print("Before byte list len: ", string.len(privateKey))
-
-					local afterByteList = encrypto.toByteListString(privateKey)
-
-					local afterByteList = encrypto.fromByteListString(afterByteList)
-
-					print("After byte list len: ", string.len(afterByteList))
-
 					--local insertNewKeys = sql.Query("INSERT INTO server_keys (PrivateKey, PublicKey) VALUES ('" .. encrypto.toByteListString(privateKey) .."', '" .. encrypto.toByteListString(publicKey) .. "')")
 					print(sql.LastError())
 					
@@ -264,7 +256,6 @@ if SERVER then
 	-- Check that the binary is available.
 	if file.Exists("lua/bin/gmsv_crypt_win32.dll", "MOD") then
 
-
 		require("crypt")
 		
 		encrypto.available = true
@@ -291,9 +282,9 @@ if SERVER then
 
 		encrypto.loadServerKeys()
 		local encryptedData = encrypto.encrypt("hello world")
-		--print(encryptedData)
-		--local decryptedData = encrypto.decrypt(encryptedData)
-		--print(decryptedData)
+		print(encryptedData)
+		local decryptedData = encrypto.decrypt(encryptedData)
+		print(decryptedData)
 	end
 
 end

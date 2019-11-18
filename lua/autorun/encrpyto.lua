@@ -22,14 +22,12 @@ if SERVER then
 
 	encrypto.loadServerKeys = function()
 
-		print("[ENCRYPTO] Loading outbound server keys..")
+		print("[ENCRYPTO] Loading server keys..")
 
-		local outboundKeys = encrypto.serverKeys["outbound"]
-
-		if (!outboundKeys) then
+		if (!encrypto.serverKeysLoaded) then
 
 			-- do keys exist in db?
-			local outboundDBServerKeys = sql.QueryRow("SELECT * FROM server_keys WHERE ID='outbound'")
+			local outboundDBServerKeys = sql.QueryRow("SELECT * FROM server_keys")
 			print(sql.LastError())
 
 			if (outboundDBServerKeys == nil) then
@@ -86,10 +84,13 @@ if SERVER then
 					encrypto.serverKeys["private_key"] = privateKey
 					encrypto.serverKeys["session_key"] = sessionKey
 					encrypto.serverKeys["session_key_iv"] = sessionKeyIV
+					encrypto.serverKeysLoaded = false
+				else
+					encrypto.available = false
 				end
 			else
 
-				print("[ENCRYPTO] Loading outbound keys from database...")
+				print("[ENCRYPTO] Loading keys from database...")
 
 				local sessionKeyReady = false
 				local sessionKeyIVReady = false
@@ -110,16 +111,21 @@ if SERVER then
 					sessionKeyIVReady = true
 				end
 
-				encrypto.serverKeys = {}
-				encrypto.serverKeys["public_key"] = outboundDBServerKeys["PublicKey"]
-				encrypto.serverKeys["private_key"] = outboundDBServerKeys["PrivateKey"]
-				encrypto.serverKeys["session_key"] = sessionKey
-				encrypto.serverKeys["session_key_iv"] = sessionKeyIV
+				if (sessionKeyReady and sessionKeyIVReady) then
+					encrypto.serverKeys = {}
+					encrypto.serverKeys["public_key"] = outboundDBServerKeys["PublicKey"]
+					encrypto.serverKeys["private_key"] = outboundDBServerKeys["PrivateKey"]
+					encrypto.serverKeys["session_key"] = sessionKey
+					encrypto.serverKeys["session_key_iv"] = sessionKeyIV
+					encrypto.serverKeysLoaded = false
+				else
+					encrypto.available = false
+				end
 
 			end
 		end
 
-		print("[ENCRYPTO] Completed loading outbound server keys.")
+		print("[ENCRYPTO] Completed loading server keys.")
 	end
 
 
@@ -133,8 +139,27 @@ if SERVER then
 	local decrptedData = encrypto.decryptAsServer("ENCRYPTED DATA")
 ]]
 	encrypto.encryptAsServer = function(pRawData)
+		if (!encrypto.available) then return end
 		-- crypts primary key is the private key
 		-- crypt's secondary  key is the public key
+
+		-- encrypt data with session key
+		local sessionKey = encrypto.serverKeys["session_key"]
+		local sessionKeyIV = encrypto.serverKeys["session_key_iv"]
+
+		local sessionKeyIVSuccess, sessionKeyIVErr = encrypto.SessionCrypter:SetSecondaryKey(sessionKeyIV)
+		if (!sessionKeyIVSuccess) then
+			print(sessionKeyIVErr)
+			encrypto.available = false
+			return pRawData
+		end
+
+		local sessionKeySuccess, sessionKeyErr = encrypto.SessionCrypter:SetPrimaryKey(sessionKey)
+		encrypto.SessionCrypter:Encrypt()
+
+		-- encrypt session key with RSA keys
+
+		-- send the encrypted key and encrypted data together to be seperated later.
 
 
 		-- get the inbound public key
@@ -172,6 +197,7 @@ if SERVER then
 		encrypto.available = true
 
 		encrypto.serverKeys = {}
+		encrypto.serverKeysLoaded = false
 
 		encrypto.Crypter = crypt.RSA() -- this is a class. eg. crypter = new RSA(), crypter->SetPrivateKey(), crypter->Encrypt()
 		encrypto.SessionCrypter = crypt.AES() -- this is a class. eg. crypter = new RSA(), crypter->SetPrivateKey(), crypter->Encrypt()

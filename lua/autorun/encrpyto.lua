@@ -1,12 +1,8 @@
-encrypto = {}
-encrypto.available = false
-
-
 if SERVER then
+	encrypto = {}
 
 	encrypto.toByteListString = function(pByteString)
 		local byteArray = {string.byte(pByteString, 1, string.len(pByteString)+1 )} -- convert vararg to table
-		print(#byteArray)
 		return table.concat(byteArray, ",")
 	end
 
@@ -78,7 +74,7 @@ if SERVER then
 				-- add to the database
 				if (privateKeyReady and publicKeyReady and sessionKeyReady and sessionKeyIVReady) then
 
-					--local insertNewKeys = sql.Query("INSERT INTO server_keys (PrivateKey, PublicKey) VALUES ('" .. encrypto.toByteListString(privateKey) .."', '" .. encrypto.toByteListString(publicKey) .. "')")
+					local insertNewKeys = sql.Query("INSERT INTO server_keys (PrivateKey, PublicKey) VALUES ('" .. encrypto.toByteListString(privateKey) .."', '" .. encrypto.toByteListString(publicKey) .. "')")
 					print(sql.LastError())
 					
 					encrypto.serverKeys = {}
@@ -86,7 +82,7 @@ if SERVER then
 					encrypto.serverKeys["private_key"] = privateKey
 					encrypto.serverKeys["session_key"] = sessionKey
 					encrypto.serverKeys["session_key_iv"] = sessionKeyIV
-					encrypto.serverKeysLoaded = false
+					encrypto.serverKeysLoaded = true
 				else
 					encrypto.available = false
 				end
@@ -119,7 +115,7 @@ if SERVER then
 					encrypto.serverKeys["private_key"] = encrypto.fromByteListString(DBServerKeys["PrivateKey"])
 					encrypto.serverKeys["session_key"] = sessionKey
 					encrypto.serverKeys["session_key_iv"] = sessionKeyIV
-					encrypto.serverKeysLoaded = false
+					encrypto.serverKeysLoaded = true
 				else
 					encrypto.available = false
 				end
@@ -131,17 +127,11 @@ if SERVER then
 	end
 
 
---[[
-	Usage:
-
-	local encryptedData, signature = encrypto.encryptAsServer("my name")
-	local encryptedData = encrypto.encryptAsServer("my name")
-
-	local decryptedData, signatureValid = encrypto.decryptAsServer("ENCRYPTED DATA", "ENCRYPTED DATA SIGNATURE")
-	local decrptedData = encrypto.decryptAsServer("ENCRYPTED DATA")
-]]
 	encrypto.encrypt = function(pRawData)
-		if (!encrypto.available) then return end
+		if (!encrypto.available) then
+			print("[ENCRYPTO] ERROR ENCRYPTING!")
+			return
+		end
 		-- crypts primary key is the private key
 		-- crypt's secondary  key is the public key
 
@@ -153,21 +143,21 @@ if SERVER then
 		if (!sessionKeyIVSuccess) then
 			print("Session Key IV Error", sessionKeyIVErr)
 			encrypto.available = false
-			return pRawData
+			return
 		end
 
 		local sessionKeySuccess, sessionKeyErr = encrypto.EncryptionSessionCrypter:SetPrimaryKey(sessionKey)
 		if (!sessionKeySuccess) then
 			print("Session Key Error", sessionKeyErr)
 			encrypto.available = false
-			return pRawData
+			return
 		end
 		
 		local encryptedData, encryptedDataErr = encrypto.EncryptionSessionCrypter:Encrypt(pRawData)
 		if (encryptedData == nil) then
 			print("Encrypted Data Error", encryptedDataErr)
 			encrypto.available = false
-			return pRawData
+			return
 		end
 
 		-- encrypt session key with RSA keys
@@ -178,7 +168,7 @@ if SERVER then
 		if (!publicKeySuccess) then
 			print("Public Key Error", publicKeyErr)
 			encrypto.available = false
-			return pRawData
+			return
 		end
 
 		local completeSessionKey = sessionKeyIV .. sessionKey -- 64 bytes
@@ -192,6 +182,11 @@ if SERVER then
 	end
 
 	encrypto.decrypt = function(pEncryptedData)
+		if (!encrypto.available) then 
+			print("[ENCRYPTO] ERROR ENCRYPTING!")
+			return
+		end
+
 		-- the encrypted data is the encrypted session key and the encrypted data together.
 
 		-- encrypted session key equals the session key IV + sessionKey which totals 64 bytes and then encrypted makes 128 bytes
@@ -205,7 +200,7 @@ if SERVER then
 		if (!primaryKeySuccess) then
 			print("Decrypting Private Key Error", privateKeyErr)
 			encrypto.available = false
-			return pEncryptedData
+			return
 		end
 
 		local publicKey = encrypto.serverKeys["public_key"]
@@ -213,14 +208,14 @@ if SERVER then
 		if (!publicKeySuccess) then
 			print(publicKeyErr)
 			encrypto.available = false
-			return pRawData
+			return
 		end
 
 		local decryptedCombinedSessionKey, sessionCombinedKeyDecryptionErr = encrypto.Crypter:Decrypt(encryptedCombinedSessionKeyIV)
 		if (decryptedCombinedSessionKey == nil) then
 			print(sessionCombinedKeyDecryptionErr)
 			encrypto.available = false
-			return pEncryptedData
+			return
 		end
 
 		-- decode the combined session key into 2
@@ -234,14 +229,14 @@ if SERVER then
 		if (!sessionKeyIVSuccess) then
 			print(sessionKeyIVErr)
 			encrypto.available = false
-			return pRawData
+			return
 		end
 
 		local sessionKeySuccess, sessionKeyErr = encrypto.DecryptionSessionCrypter:SetPrimaryKey(sessionKey)
 		if (!sessionKeySuccess) then
 			print(sessionKeyErr)
 			encrypto.available = false
-			return pRawData
+			return
 		end
 
 
@@ -273,14 +268,13 @@ if SERVER then
 
 		if (!serverTableExists) then
 			sql.Query("CREATE TABLE server_keys (ID TEXT, PrivateKey TEXT, PublicKey TEXT)")
-		else
-			--sql.Query("DROP TABLE server_keys")
-			--sql.Query("CREATE TABLE server_keys (ID TEXT, PrivateKey TEXT, PublicKey TEXT)")
 		end
 
-
-
 		encrypto.loadServerKeys()
+
+
+
+		--[[ Example use]]
 		local encryptedData = encrypto.encrypt("hello world")
 		print(encryptedData)
 		local decryptedData = encrypto.decrypt(encryptedData)

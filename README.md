@@ -25,3 +25,10 @@ This repo **includes a built gm_crypt win32 dll** which is included in the root 
 
 It uses the binary module gm_crypt [https://github.com/danielga/gm_crypt](https://github.com/danielga/gm_crypt) 
 
+## Installing
+
+ 1. Place the Encrypto repository into your addons directory
+ 2. Extract (or build) the gmsv_crypt_win32.dll to the directory "GarrysMod/garrysmod/lua/bin/"
+
+## Legal
+https://tldrlegal.com/license/gnu-general-public-license-v3-(gpl-3)

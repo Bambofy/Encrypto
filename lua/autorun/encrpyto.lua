@@ -274,11 +274,12 @@ if SERVER then
 
 
 
-		--[[ Example use]]
-		local encryptedData = encrypto.encrypt("hello world")
+		--[[ Example use
+		local encryptedData = encrypto.encrypt("helalo world")
 		print(encryptedData)
 		local decryptedData = encrypto.decrypt(encryptedData)
 		print(decryptedData)
+		]]
 	end
 
 end
